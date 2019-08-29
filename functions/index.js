@@ -47,7 +47,7 @@ exports.dailyCheck = functions.pubsub
                             let token;
 
                             Promise.all([deviceTokenPromise]).then((values) => {
-                                
+
                                 token = values[0].val();
                                 //Token:
                                 token = token["token"];
@@ -63,7 +63,7 @@ exports.dailyCheck = functions.pubsub
                                 //Send to device:
                                 // For each message check if there was an error.
                                 admin.messaging().sendToDevice(token, payload)
-                                .then((result) => {
+                                    .then((result) => {
                                         console.log('result:', result);
                                     }
                                     ).catch((reason) => {
@@ -71,7 +71,7 @@ exports.dailyCheck = functions.pubsub
                                             console.error('Failure sending notification to', token + ' ' + reason);
                                             // Cleanup the tokens who are not registered anymore.
                                             if (error.code === 'messaging/invalid-registration-token' ||
-                                            error.code === 'messaging/registration-token-not-registered') {
+                                                error.code === 'messaging/registration-token-not-registered') {
                                                 tokenToRemove = admin.database().ref(`/NotificationsToken/${key}`).remove();
                                             }
                                         }
@@ -124,22 +124,23 @@ exports.openScheduleCheck = functions.pubsub
                                                 }
                                             };
                                             //Send to device:
-                                            const response = admin.messaging().sendToDevice(tokens, payload);
                                             // For each message check if there was an error.
-                                            let tokenToRemove = [];
-                                            response.then(result => console.log('result:', result)
-                                            ).catch((reason) => {
-                                                console.log('Something is SHIT');
-                                                if (reason) {
-                                                    console.error('Failure sending notification to', token + ' ' + reason);
-                                                    // Cleanup the tokens who are not registered anymore.
-                                                    if (error.code === 'messaging/invalid-registration-token' ||
-                                                        error.code === 'messaging/registration-token-not-registered') {
-                                                        tokensToRemove.push(admin.database().ref(`/NotificationsToken/${key}`).remove());
-                                                    }
+                                            let tokensToRemove = [];
+                                            admin.messaging().sendToDevice(token, payload)
+                                                .then((result) => {
+                                                    console.log('result:', result);
                                                 }
-                                                return Promise.all([tokenToRemove]);
-                                            });
+                                                ).catch((reason) => {
+                                                    if (reason) {
+                                                        console.error('Failure sending notification to', token + ' ' + reason);
+                                                        // Cleanup the tokens who are not registered anymore.
+                                                        if (error.code === 'messaging/invalid-registration-token' ||
+                                                            error.code === 'messaging/registration-token-not-registered') {
+                                                            tokensToRemove.push(admin.database().ref(`/NotificationsToken/${key}`).remove());
+                                                        }
+                                                    }
+                                                    return Promise.all([tokensToRemove]);
+                                                });
                                         }
                                     }
                                 });
