@@ -8,7 +8,7 @@ admin.initializeApp();
 exports.dailyCheck = functions.pubsub
     .schedule('0 20 * * *')
     .timeZone('Israel')
-    .onRun((context) => {
+    .onRun((context) => { 
         //getting today's date
         let today = new Date(Date.now());
         let day = today.getUTCDate();
@@ -39,13 +39,11 @@ exports.dailyCheck = functions.pubsub
                             let hours = time["hours"];
                             time = hours + ":" + min;
 
-                            // The array containing all the user's tokens.
-                            let token;
-
                             // Get the device notification token.
-                            admin.database()
+                             admin.database()
                                 .ref(`/NotificationsToken/${key}`).once('value').then((tokenSnapshot) => {
-                                    token = tokenSnapshot.val()["token"];
+                                    let token = tokenSnapshot.val()["token"];
+                                    
                                     //date for notification:
                                     let appoint_date = "" + (day + 1) + '/' + month;
 
