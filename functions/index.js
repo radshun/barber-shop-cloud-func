@@ -37,47 +37,45 @@ exports.dailyCheck = functions.pubsub
                             let time = appoint.units[0].startTime;
                             let min = time["minutes"];
                             let hours = time["hours"];
-                            time = min + ":" + hours;
-
-                            // Get the device notification token.
-                            const deviceTokenPromise = admin.database()
-                                .ref(`/NotificationsToken/${key}`).once('value');
+                            time = hours + ":" + min;
 
                             // The array containing all the user's tokens.
                             let token;
 
-                            Promise.all([deviceTokenPromise]).then((values) => {
+                            // Get the device notification token.
+                            admin.database()
+                                .ref(`/NotificationsToken/${key}`).once('value').then((tokenSnapshot) => {
+                                    token = tokenSnapshot.val()["token"];
+                                    //date for notification:
+                                    let appoint_date = "" + (day + 1) + '/' + month;
 
-                                token = values[0].val();
-                                //Token:
-                                token = token["token"];
-                                // Notification details:
-                                const payload = {
-                                    notification: {
-                                        title: 'Neighbors Barbershop',
-                                        body: `רצינו להזכירך שיש לך מחר תור ל${service}לשעה ${time} אצל ${barber}`,
-                                        icon: "https://i.imgur.com/Sdhxwwj.png"
-                                    }
-                                };
-                                let tokenToRemove;
-                                //Send to device:
-                                // For each message check if there was an error.
-                                admin.messaging().sendToDevice(token, payload)
-                                    .then((result) => {
-                                        console.log('result:', result);
-                                    }
-                                    ).catch((reason) => {
-                                        if (reason) {
-                                            console.error('Failure sending notification to', token + ' ' + reason);
-                                            // Cleanup the tokens who are not registered anymore.
-                                            if (error.code === 'messaging/invalid-registration-token' ||
-                                                error.code === 'messaging/registration-token-not-registered') {
-                                                tokenToRemove = admin.database().ref(`/NotificationsToken/${key}`).remove();
-                                            }
+                                    // Notification details:
+                                    const payload = {
+                                        notification: {
+                                            title: 'תזכורת לתור',
+                                            body: `רצינו להזכירך שיש לך תור מחר (${appoint_date}) בשעה ${time} ל${service} אצל ${barber} `,
+                                            icon: "https://i.imgur.com/Sdhxwwj.png"
                                         }
-                                        return Promise.all([tokenToRemove]);
-                                    });
-                            });
+                                    };
+                                    let tokenToRemove;
+                                    //Send to device:                                
+                                    // For each message check if there was an error.
+                                    admin.messaging().sendToDevice(token, payload)
+                                        .then((result) => {
+                                            console.log('result:', result);
+                                        }
+                                        ).catch((reason) => {
+                                            if (reason) {
+                                                console.error('Failure sending notification to', token + ' ' + reason);
+                                                // Cleanup the tokens who are not registered anymore.
+                                                if (error.code === 'messaging/invalid-registration-token' ||
+                                                    error.code === 'messaging/registration-token-not-registered') {
+                                                    tokenToRemove = admin.database().ref(`/NotificationsToken/${key}`).remove();
+                                                }
+                                            }
+                                            return Promise.all([tokenToRemove]);
+                                        });
+                                });
                         });
                     }
                 }
