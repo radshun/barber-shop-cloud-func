@@ -47,8 +47,7 @@ exports.dailyCheck = functions.pubsub
                             let token;
 
                             Promise.all([deviceTokenPromise]).then((values) => {
-                                console.log('GOT HERE 1');
-
+                                
                                 token = values[0].val();
                                 //Token:
                                 token = token["token"];
@@ -60,30 +59,30 @@ exports.dailyCheck = functions.pubsub
                                         icon: "https://i.imgur.com/Sdhxwwj.png"
                                     }
                                 };
-                                //Send to device:
-                                const response = admin.messaging().sendToDevice(token, payload);
-                                // For each message check if there was an error.
                                 let tokenToRemove;
-                                response.then(result => console.log('result:', result)
-                                ).catch((reason) => {
-                                    console.log('Something is SHIT');
-                                    if (reason) {
-                                        console.error('Failure sending notification to', token + ' ' + reason);
-                                        // Cleanup the tokens who are not registered anymore.
-                                        if (error.code === 'messaging/invalid-registration-token' ||
-                                            error.code === 'messaging/registration-token-not-registered') {
-                                            tokenToRemove = admin.database().ref(`/NotificationsToken/${key}`).remove();
-                                        }
+                                //Send to device:
+                                // For each message check if there was an error.
+                                admin.messaging().sendToDevice(token, payload)
+                                .then((result) => {
+                                        console.log('result:', result);
                                     }
-                                    return Promise.all([tokenToRemove]);
-                                });
+                                    ).catch((reason) => {
+                                        if (reason) {
+                                            console.error('Failure sending notification to', token + ' ' + reason);
+                                            // Cleanup the tokens who are not registered anymore.
+                                            if (error.code === 'messaging/invalid-registration-token' ||
+                                            error.code === 'messaging/registration-token-not-registered') {
+                                                tokenToRemove = admin.database().ref(`/NotificationsToken/${key}`).remove();
+                                            }
+                                        }
+                                        return Promise.all([tokenToRemove]);
+                                    });
                             });
                         });
                     }
                 }
             }).then(() => {
                 console.log('finished propertly');
-                return true;
             });
 
     });
@@ -127,7 +126,7 @@ exports.openScheduleCheck = functions.pubsub
                                             //Send to device:
                                             const response = admin.messaging().sendToDevice(tokens, payload);
                                             // For each message check if there was an error.
-                                            let tokenToRemove= [];
+                                            let tokenToRemove = [];
                                             response.then(result => console.log('result:', result)
                                             ).catch((reason) => {
                                                 console.log('Something is SHIT');
@@ -136,8 +135,8 @@ exports.openScheduleCheck = functions.pubsub
                                                     // Cleanup the tokens who are not registered anymore.
                                                     if (error.code === 'messaging/invalid-registration-token' ||
                                                         error.code === 'messaging/registration-token-not-registered') {
-                                                            tokensToRemove.push(admin.database().ref(`/NotificationsToken/${key}`).remove());
-                                                        }
+                                                        tokensToRemove.push(admin.database().ref(`/NotificationsToken/${key}`).remove());
+                                                    }
                                                 }
                                                 return Promise.all([tokenToRemove]);
                                             });
