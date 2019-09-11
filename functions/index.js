@@ -8,7 +8,7 @@ admin.initializeApp();
 exports.dailyCheck = functions.pubsub
     .schedule('0 20 * * *')
     .timeZone('Israel')
-    .onRun((context) => { 
+    .onRun(async (context) => {
         //getting today's date
         let today = new Date(Date.now());
         let day = today.getUTCDate();
@@ -22,127 +22,110 @@ exports.dailyCheck = functions.pubsub
         let date_af = "" + (day + 1) + month + year;
 
         //getting the array of appointments:
-        admin.database().ref("AppointmentsDates").child(date_af).once('value')
-            .then((snapshot) => {
-                let keys = snapshot.val();
-                for (var key in keys) {
-                    if (keys.hasOwnProperty(key)) {
-                        let appoint_ref = admin.database().ref('Appointments').child(key);
+        const snapshot = await admin.database().ref("AppointmentsDates").child(date_af).once('value');
+        let keys = snapshot.val();
 
-                        appoint_ref.once('value').then((appointment) => {
-                            let appoint = appointment.val();
+        for (var key in keys) {
+            if (keys.hasOwnProperty(key)) {
+                const appointment = await admin.database().ref('Appointments').child(key).once('value');
 
-                            let barber = appoint.barber["name"];
-                            let service = appoint.servies["servies"];
-                            let time = appoint.units[0].startTime;
-                            let min = time["minutes"];
-                            let hours = time["hours"];
-                            time = hours + ":" + min;
+                let appoint = appointment.val();
 
-                            // Get the device notification token.
-                             admin.database()
-                                .ref(`/NotificationsToken/${key}`).once('value').then((tokenSnapshot) => {
-                                    let token = tokenSnapshot.val()["token"];
-                                    
-                                    //date for notification:
-                                    let appoint_date = "" + (day + 1) + '/' + month;
+                let barber = appoint.barber["name"];
+                let service = appoint.servies["servies"];
+                let time = appoint.units[0].startTime;
+                let min = time["minutes"];
+                let hours = time["hours"];
+                time = hours + ":" + min;
 
-                                    // Notification details:
-                                    const payload = {
-                                        notification: {
-                                            title: 'תזכורת לתור',
-                                            body: `רצינו להזכירך שיש לך תור מחר (${appoint_date}) בשעה ${time} ל${service} אצל ${barber} `,
-                                            icon: "https://i.imgur.com/Sdhxwwj.png"
-                                        }
-                                    };
-                                    let tokenToRemove;
-                                    //Send to device:                                
-                                    // For each message check if there was an error.
-                                    admin.messaging().sendToDevice(token, payload)
-                                        .then((result) => {
-                                            console.log('result:', result);
-                                        }
-                                        ).catch((reason) => {
-                                            if (reason) {
-                                                console.error('Failure sending notification to', token + ' ' + reason);
-                                                // Cleanup the tokens who are not registered anymore.
-                                                if (error.code === 'messaging/invalid-registration-token' ||
-                                                    error.code === 'messaging/registration-token-not-registered') {
-                                                    tokenToRemove = admin.database().ref(`/NotificationsToken/${key}`).remove();
-                                                }
-                                            }
-                                            return Promise.all([tokenToRemove]);
-                                        });
-                                });
-                        });
+                const tokenSnapshot = await admin.database()
+                    .ref(`/NotificationsToken/${key}`).once('value');
+
+                let token = tokenSnapshot.val()["token"];
+                //date for notification:
+                let appoint_date = "" + (day + 1) + '/' + month;
+
+                const payload = {
+                    notification: {
+                        title: 'תזכורת לתור',
+                        body: `רצינו להזכירך שיש לך תור מחר (${appoint_date}) בשעה ${time} ל${service} אצל ${barber} `,
+                        icon: "https://i.imgur.com/Sdhxwwj.png"
+                    }
+                };
+                let tokenToRemove;
+                //Send to device:                                
+                // For each message check if there was an error.
+
+                const response = await admin.messaging().sendToDevice(token, payload);
+                const error = response.results[0].error;
+                if (error) {
+                    console.error('Failure sending notification to', token, error);
+                    // Cleanup the tokens who are not registered anymore.
+                    if (error.code === 'messaging/invalid-registration-token' ||
+                        error.code === 'messaging/registration-token-not-registered') {
+                        const remove_response = await admin.database()
+                            .ref(`/NotificationsToken/${key}`).remove();
                     }
                 }
-            }).then(() => {
-                console.log('finished propertly');
-            });
-
+            }
+        }
     });
 
-//function that checks for notifications 
-//that are needed to be sent to the users who asked for them:
 exports.openScheduleCheck = functions.pubsub
     .schedule('0 * * * *')
     .timeZone('Israel')
-    .onRun((context) => {
-        admin.database().ref("Notifications").once('value')
-            .then((snapshot) => {
-                const allDates = snapshot.val();
-                for (let date in allDates) {
-                    if (allDates.hasOwnProperty(date)) {
-                        admin.database().ref(`Notifications/${date}`).once('value').then((barbersSnap) => {
-                            const barbers_ar = barbersSnap.val();
-                            let index = 0;
-                            for (let barber of barbers_ar) {
-                                index++;
-                                let dateRef = admin.database().ref(`Dates/${index}/availableDays/${date}`);
-                                dateRef.once('value').then((dateSnapshot) => {
-                                    if (dateSnapshot.exists()) {
-                                        if (barber) {
-                                            let tokens = [];
-                                            let tokenForName;
-                                            for (const token in barber) {
-                                                if (barber.hasOwnProperty(key)) {
-                                                    tokens.push(token);
-                                                    tokenForName = token;
-                                                }
-                                            }
-                                            // Notification details:
-                                            const payload = {
-                                                notification: {
-                                                    title: 'Neighbors Barbershop',
-                                                    body: `נפתחנו תורים ל${barber[tokenForName]} לתאריך ${date}`,
-                                                    icon: "https://i.imgur.com/Sdhxwwj.png"
-                                                }
-                                            };
-                                            //Send to device:
-                                            // For each message check if there was an error.
-                                            let tokensToRemove = [];
-                                            admin.messaging().sendToDevice(token, payload)
-                                                .then((result) => {
-                                                    console.log('result:', result);
-                                                }
-                                                ).catch((reason) => {
-                                                    if (reason) {
-                                                        console.error('Failure sending notification to', token + ' ' + reason);
-                                                        // Cleanup the tokens who are not registered anymore.
-                                                        if (error.code === 'messaging/invalid-registration-token' ||
-                                                            error.code === 'messaging/registration-token-not-registered') {
-                                                            tokensToRemove.push(admin.database().ref(`/NotificationsToken/${key}`).remove());
-                                                        }
-                                                    }
-                                                    return Promise.all([tokensToRemove]);
-                                                });
-                                        }
-                                    }
-                                });
+    .onRun(async (context) => {
+        const snapshot = await admin.database().ref("Notifications").once('value');
+        const allDates = snapshot.val();
+        for (let date in allDates) {
+            if (allDates.hasOwnProperty(date)) {
+                const barberSnap = await admin.database().ref(`Notifications/${date}`).once('value');
+                const barbers_ar = barbersSnap.val();
+                let index = 0;
+                for (let barber of barbers_ar) {
+                    index++;
+                    const dateSnapshot = await admin.database().ref(`Dates/${index}/availableDays/${date}`).once('value');
+                    if (dateSnapshot.exists()) {
+                        if (barber) {
+                            let tokens = [];
+                            let tokenForName;
+                            for (const token in barber) {
+                                if (barber.hasOwnProperty(token)) {
+                                    tokens.push(token);
+                                    tokenForName = token;
+                                }
                             }
-                        });
+                            // Notification details:
+                            const payload = {
+                                notification: {
+                                    title: 'Neighbors Barbershop',
+                                    body: `נפתחנו תורים ל${barber[tokenForName]} לתאריך ${date}`,
+                                    icon: "https://i.imgur.com/Sdhxwwj.png"
+                                }
+                            };
+                            //Send to device:
+                            // For each message check if there was an error.
+                            let tokensToRemove = [];
+                            const response = await admin.messaging().sendToDevice(tokens, payload);
+                            response.results.forEach((result, index) => {
+                                const error = result.error;
+                                if (error) {
+                                    console.error('Failure sending notification to', token + ' ' + error);
+                                    // Cleanup the tokens who are not registered anymore.
+                                    if (error.code === 'messaging/invalid-registration-token' ||
+                                        error.code === 'messaging/registration-token-not-registered') {
+                                        tokensToRemove.push(admin.database().ref(`/NotificationsToken/${token}`).remove());
+                                    }
+                                }
+                            });
+                            return Promise.all(tokensToRemove);
+                        }
                     }
                 }
-            });
+            }
+        }
     });
+
+
+
+
